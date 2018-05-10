@@ -113,6 +113,31 @@ func CreateApiserverCertificates(ctx context.Context, cluster *api.Cluster) (con
 	return ctx, nil
 }
 
+func CreateEtcdCertificates(ctx context.Context, cluster *api.Cluster) (context.Context, error) {
+	Logger(ctx).Infoln("Generating CA certificate for etcd")
+
+	certStore := Store(ctx).Certificates(cluster.Name)
+
+	// -----------------------------------------------
+	caKey, err := cert.NewPrivateKey()
+	if err != nil {
+		return ctx, errors.Errorf("failed to generate private key. Reason: %v", err)
+	}
+	caCert, err := cert.NewSelfSignedCACert(cert.Config{CommonName: EtcdCACertAndKeyBaseName}, caKey)
+	if err != nil {
+		return ctx, errors.Errorf("failed to generate self-signed certificate. Reason: %v", err)
+	}
+
+	ctx = context.WithValue(ctx, paramEtcdCACert{}, caCert)
+	ctx = context.WithValue(ctx, paramEtcdCAKey{}, caKey)
+	if err = certStore.Create(EtcdCACertAndKeyBaseName, caCert, caKey); err != nil {
+		return ctx, err
+	}
+
+	Logger(ctx).Infoln("CA certificates generated successfully.")
+	return ctx, nil
+}
+
 func LoadCACertificates(ctx context.Context, cluster *api.Cluster) (context.Context, error) {
 	certStore := Store(ctx).Certificates(cluster.Name)
 
@@ -148,6 +173,18 @@ func LoadApiserverCertificate(ctx context.Context, cluster *api.Cluster) (contex
 	}
 	ctx = context.WithValue(ctx, paramApiServerCert{}, apiserverCert)
 	ctx = context.WithValue(ctx, paramApiServerKey{}, apiserverKey)
+
+	return ctx, nil
+}
+
+func LoadEtcdCertificate(ctx context.Context, cluster *api.Cluster) (context.Context, error)  {
+	certStore := Store(ctx).Certificates(cluster.Name)
+	etcdCaCert, etcdCaKey, err := certStore.Get(EtcdCACertAndKeyBaseName)
+	if err != nil {
+		return ctx, errors.Errorf("failed to get etcd certificates. Reason: %v", err)
+	}
+	ctx = context.WithValue(ctx, paramEtcdCACert{}, etcdCaCert)
+	ctx = context.WithValue(ctx, paramEtcdCAKey{}, etcdCaKey)
 
 	return ctx, nil
 }

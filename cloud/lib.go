@@ -62,6 +62,9 @@ func Create(ctx context.Context, cluster *api.Cluster, config *api.ClusterProvid
 	if ctx, err = CreateApiserverCertificates(ctx, cluster); err != nil {
 		return nil, err
 	}
+	if ctx, err = CreateEtcdCertificates(ctx, cluster); err != nil {
+		return nil, err
+	}
 	if ctx, err = CreateSSHKey(ctx, cluster); err != nil {
 		return nil, err
 	}

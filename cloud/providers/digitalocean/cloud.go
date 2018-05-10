@@ -74,6 +74,9 @@ func (cm *ClusterManager) PrepareCloud(clusterName string) error {
 	if cm.ctx, err = LoadCACertificates(cm.ctx, cm.cluster); err != nil {
 		return err
 	}
+	if cm.ctx, err = LoadEtcdCertificate(cm.ctx, cm.cluster); err != nil {
+		return err
+	}
 	if cm.ctx, err = LoadSSHKey(cm.ctx, cm.cluster); err != nil {
 		return err
 	}

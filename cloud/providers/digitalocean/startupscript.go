@@ -71,6 +71,15 @@ func newMasterTemplateData(ctx context.Context, cluster *api.Cluster, machine *c
 			DNSDomain:     cluster.Spec.ClusterAPI.Spec.ClusterNetwork.ServiceDomain,
 		},
 		KubernetesVersion: cluster.Spec.KubernetesVersion,
+		Etcd: kubeadmapi.Etcd{
+			Image: EtcdImage,
+			ExtraArgs: map[string]string{
+				"name": machine.Name,
+				"cluster-type": "join",
+				"data-dir": fmt.Sprintf("/var/lib/etcd/%v", machine.Name),
+			},
+
+		},
 		// "external": cloudprovider not supported for apiserver and controller-manager
 		// https://github.com/kubernetes/kubernetes/pull/50545
 		CloudProvider:              "",

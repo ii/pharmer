@@ -30,9 +30,8 @@ type paramApiServerCaKey struct{}
 type paramApiServerCert struct{}
 type paramApiServerKey struct{}
 
-type paramEtcdCACert struct {}
-type paramEtcdCAKey struct {}
-
+type paramEtcdCACert struct{}
+type paramEtcdCAKey struct{}
 
 type paramSSHKey struct{}
 
@@ -109,11 +108,11 @@ func ApiServerKey(ctx context.Context) *rsa.PrivateKey {
 	return ctx.Value(paramApiServerKey{}).(*rsa.PrivateKey)
 }
 
-func EtcdCaCert(ctx context.Context) *x509.Certificate  {
+func EtcdCaCert(ctx context.Context) *x509.Certificate {
 	return ctx.Value(paramEtcdCACert{}).(*x509.Certificate)
 }
 
-func EtcdCaKey(ctx context.Context) *rsa.PrivateKey  {
+func EtcdCaKey(ctx context.Context) *rsa.PrivateKey {
 	return ctx.Value(paramEtcdCAKey{}).(*rsa.PrivateKey)
 }
 

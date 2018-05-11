@@ -56,6 +56,11 @@ func newMasterTemplateData(ctx context.Context, cluster *api.Cluster, machine *c
 		api.NodePoolKey: machine.Name,
 	}.String()
 
+	clusterType := "seed"
+	if machine.Labels[api.EtcdMemberKey] == api.RoleMember {
+		clusterType = "join"
+	}
+
 	cfg := kubeadmapi.MasterConfiguration{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "kubeadm.k8s.io/v1alpha1",
@@ -74,11 +79,19 @@ func newMasterTemplateData(ctx context.Context, cluster *api.Cluster, machine *c
 		Etcd: kubeadmapi.Etcd{
 			Image: EtcdImage,
 			ExtraArgs: map[string]string{
-				"name": machine.Name,
-				"cluster-type": "join",
-				"data-dir": fmt.Sprintf("/var/lib/etcd/%v", machine.Name),
+				"name":                        machine.Name,
+				"cluster-type":                clusterType,
+				"data-dir":                    fmt.Sprintf("/var/lib/etcd/%v", machine.Name),
+				"listen-peer-urls":            "http://127.0.0.1:2380",
+				"listen-metrics-urls":         "http://127.0.0.1:2381",
+				"listen-client-urls":          "http://127.0.0.1:2379",
+				"initial-advertise-peer-urls": "http://127.0.0.1:2380",
+				"advertise-client-urls":       "http://127.0.0.1:2379",
+				"client-cert-auth":            "false",
+				"peer-client-cert-auth":       "false",
+				"quota-backend-bytes":         "2147483648",
+				"v": "10",
 			},
-
 		},
 		// "external": cloudprovider not supported for apiserver and controller-manager
 		// https://github.com/kubernetes/kubernetes/pull/50545

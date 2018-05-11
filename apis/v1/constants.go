@@ -9,10 +9,13 @@ const (
 	RoleMasterKey = RoleKeyPrefix + RoleMaster
 	RoleNodeKey   = RoleKeyPrefix + RoleNode
 
+	RoleLeader        = "leader"
+	RoleMember        = "member"
 	PharmerCluster    = "cloud.appscode.com/cluster"
 	KubeadmVersionKey = "cloud.appscode.com/kubeadm-version"
 	NodePoolKey       = "cloud.appscode.com/pool"
 	KubeSystem_App    = "k8s-app"
+	EtcdMemberKey     = "cloud.appscode.com/etcd"
 
 	HostnameKey     = "kubernetes.io/hostname"
 	ArchKey         = "beta.kubernetes.io/arch"

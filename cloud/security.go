@@ -114,7 +114,7 @@ func CreateApiserverCertificates(ctx context.Context, cluster *api.Cluster) (con
 }
 
 func CreateEtcdCertificates(ctx context.Context, cluster *api.Cluster) (context.Context, error) {
-	Logger(ctx).Infoln("Generating CA certificate for etcd")
+	Logger(ctx).Infoln("Generating ETCD CA certificate for etcd")
 
 	certStore := Store(ctx).Certificates(cluster.Name)
 
@@ -134,7 +134,7 @@ func CreateEtcdCertificates(ctx context.Context, cluster *api.Cluster) (context.
 		return ctx, err
 	}
 
-	Logger(ctx).Infoln("CA certificates generated successfully.")
+	Logger(ctx).Infoln("ETCD CA certificates generated successfully.")
 	return ctx, nil
 }
 
@@ -177,7 +177,7 @@ func LoadApiserverCertificate(ctx context.Context, cluster *api.Cluster) (contex
 	return ctx, nil
 }
 
-func LoadEtcdCertificate(ctx context.Context, cluster *api.Cluster) (context.Context, error)  {
+func LoadEtcdCertificate(ctx context.Context, cluster *api.Cluster) (context.Context, error) {
 	certStore := Store(ctx).Certificates(cluster.Name)
 	etcdCaCert, etcdCaKey, err := certStore.Get(EtcdCACertAndKeyBaseName)
 	if err != nil {
@@ -189,6 +189,9 @@ func LoadEtcdCertificate(ctx context.Context, cluster *api.Cluster) (context.Con
 	return ctx, nil
 }
 
+func CreateEtcdServerCertAndKey() {
+
+}
 func CreateAdminCertificate(ctx context.Context) (*x509.Certificate, *rsa.PrivateKey, error) {
 	cfg := cert.Config{
 		CommonName:   "cluster-admin",

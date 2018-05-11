@@ -123,7 +123,7 @@ func CreateEtcdCertificates(ctx context.Context, cluster *api.Cluster) (context.
 	if err != nil {
 		return ctx, errors.Errorf("failed to generate private key. Reason: %v", err)
 	}
-	caCert, err := cert.NewSelfSignedCACert(cert.Config{CommonName: EtcdCACertAndKeyBaseName}, caKey)
+	caCert, err := cert.NewSelfSignedCACert(cert.Config{CommonName: "kubernetes"}, caKey)
 	if err != nil {
 		return ctx, errors.Errorf("failed to generate self-signed certificate. Reason: %v", err)
 	}

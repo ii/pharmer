@@ -21,8 +21,8 @@ var kubernetesCNIVersions = map[string]string{
 
 var prekVersions = map[string]string{
 	"1.8.0":  "1.8.0",
-	"1.9.0":  "1.9.0-rc.0",
-	"1.10.0": "1.9.0-rc.0",
+	"1.9.0":  "1.10.1-alpha.0",
+	"1.10.0": "1.10.1-alpha.0",
 }
 
 type TemplateData struct {
@@ -33,6 +33,7 @@ type TemplateData struct {
 	CAHash            string
 	CAKey             string
 	FrontProxyKey     string
+	ETCDCAKey         string
 	APIServerAddress  string
 	NetworkProvider   string
 	CloudConfig       string
@@ -192,6 +193,7 @@ pre-k merge master-config \
 	--apiserver-cert-extra-sans=$(pre-k machine private-ips) \
 	--node-name=${NODE_NAME:-} \
 	> /etc/kubernetes/kubeadm/config.yaml
+pre-k create etcd --config=/etc/kubernetes/kubeadm/config.yaml
 kubeadm init --config=/etc/kubernetes/kubeadm/config.yaml --skip-token-print
 
 {{ if eq .NetworkProvider "flannel" }}
@@ -304,8 +306,19 @@ pre-k get ca-cert --common-name=ca < /etc/kubernetes/pki/ca.key > /etc/kubernete
 cat > /etc/kubernetes/pki/front-proxy-ca.key <<EOF
 {{ .FrontProxyKey }}
 EOF
+
 pre-k get ca-cert --common-name=front-proxy-ca < /etc/kubernetes/pki/front-proxy-ca.key > /etc/kubernetes/pki/front-proxy-ca.crt
 chmod 600 /etc/kubernetes/pki/ca.key /etc/kubernetes/pki/front-proxy-ca.key
+
+mkdir -p /etc/kubernetes/pki/etcd
+
+cat > /etc/kubernetes/pki/etcd/ca.key <<EOF
+{{ .ETCDCAKey }}
+EOF
+pre-k get ca-cert --common-name=kubernetes < /etc/kubernetes/pki/etcd/ca.key > /etc/kubernetes/pki/etcd/ca.crt
+chmod 600 /etc/kubernetes/pki/etcd/ca.key
+
+
 `))
 
 	_ = template.Must(StartupScriptTemplate.New("ccm").Parse(`

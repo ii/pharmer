@@ -145,8 +145,14 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 	if err != nil {
 		return
 	}
-	if IsHASetup(cm.cluster) {
-		//TODO(): Create load balancer
+	var ip string
+	haSetup := IsHASetup(cm.cluster)
+	if haSetup {
+		Logger(cm.ctx).Info("Creating loadbalancer")
+		ip, err = cm.conn.createLoadBalancer(cm.ctx, cm.namer.LoadBalancerName())
+		if err != nil {
+			return
+		}
 	}
 	for _, master := range masterNG {
 		if d, _ := cm.conn.instanceIfExists(master); d == nil {
@@ -237,12 +243,25 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 							})
 						}
 					}
+					err = cm.cluster.SetClusterApiEndpoints()
+					if err != nil {
+						return
+					}
+				} else {
+					var did int
+					did, err = strconv.Atoi(masterServer.ExternalID)
+					if err != nil {
+						return
+					}
+					if err = cm.conn.addNodeToBalancer(cm.ctx, cm.namer.LoadBalancerName(), did); err != nil {
+						return
+					}
+					cm.cluster.Spec.ClusterAPI.Status.APIEndpoints = append(cm.cluster.Spec.ClusterAPI.Status.APIEndpoints, clusterv1.APIEndpoint{
+						Host: ip,
+						Port: int(cm.cluster.Spec.API.BindPort),
+					})
 				}
-				err = cm.cluster.SetClusterApiEndpoints()
-				if err != nil {
-					return
-				}
-				Store(cm.ctx).Clusters().Update(cm.cluster)
+
 			}
 		} else {
 			acts = append(acts, api.Action{
@@ -252,6 +271,8 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 			})
 		}
 	}
+
+	Store(cm.ctx).Clusters().Update(cm.cluster)
 
 	var kc kubernetes.Interface
 	kc, err = cm.GetAdminClient()

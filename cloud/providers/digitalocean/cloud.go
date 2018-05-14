@@ -19,6 +19,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
+var errLBNotFound = errors.New("loadbalancer not found")
+
 type cloudConnector struct {
 	ctx     context.Context
 	cluster *api.Cluster
@@ -355,3 +357,124 @@ func (conn *cloudConnector) deleteInstance(ctx context.Context, id int) error {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+
+func (conn *cloudConnector) createLoadBalancer(ctx context.Context, name string) (string, error) {
+	lb, err := conn.lbByName(ctx, name)
+	if err != nil {
+		if err == errLBNotFound {
+			lbRequest, err := conn.buildLoadBalancerRequest(name)
+			if err != nil {
+				return "", err
+			}
+			lb, _, err := conn.client.LoadBalancers.Create(ctx, lbRequest)
+			if err != nil {
+				return "", err
+			}
+			if err = conn.waitActive(lb.ID); err != nil {
+				return "", err
+			}
+			return lb.IP, nil
+		}
+	}
+
+	if lb.Status != "active" {
+		if err = conn.waitActive(lb.ID); err != nil {
+			return "", err
+		}
+	}
+	return lb.IP, nil
+}
+
+func (conn *cloudConnector) addNodeToBalancer(ctx context.Context, lbName string, id int) error {
+	lb, err := conn.lbByName(ctx, lbName)
+	if err != nil {
+		return err
+	}
+	lb.DropletIDs = append(lb.DropletIDs, id)
+	_, err = conn.client.LoadBalancers.AddDroplets(ctx, lb.ID, id)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (conn *cloudConnector) lbByName(ctx context.Context, name string) (*godo.LoadBalancer, error) {
+	lbs, _, err := conn.client.LoadBalancers.List(ctx, &godo.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, lb := range lbs {
+		if lb.Name == name {
+			return &lb, nil
+		}
+	}
+
+	return nil, errLBNotFound
+}
+
+// buildLoadBalancerRequest returns a *godo.LoadBalancerRequest to balance
+// requests for service across nodes.
+func (conn *cloudConnector) buildLoadBalancerRequest(lbName string) (*godo.LoadBalancerRequest, error) {
+
+	forwardingRules := []godo.ForwardingRule{
+		{
+			EntryProtocol:  "tcp",
+			EntryPort:      6443,
+			TargetProtocol: "tcp",
+			TargetPort:     6443,
+			//CertificateID  string `json:"certificate_id,omitempty"`
+			TlsPassthrough: false,
+		},
+	}
+
+	healthCheck := &godo.HealthCheck{
+		Protocol:               "tcp",
+		Port:                   6443,
+		CheckIntervalSeconds:   3,
+		ResponseTimeoutSeconds: 5,
+		HealthyThreshold:       5,
+		UnhealthyThreshold:     3,
+	}
+
+	stickySessions := &godo.StickySessions{
+		Type: "none",
+		//CookieName:       name,
+		//CookieTtlSeconds: ttl,
+	}
+
+	algorithm := "least_connections"
+
+	//	redirectHttpToHttps := getRedirectHttpToHttps(service)
+	clusterConfig := conn.cluster.ProviderConfig()
+
+	return &godo.LoadBalancerRequest{
+		Name:                lbName,
+		DropletIDs:          []int{},
+		Region:              clusterConfig.Region,
+		ForwardingRules:     forwardingRules,
+		HealthCheck:         healthCheck,
+		StickySessions:      stickySessions,
+		Algorithm:           algorithm,
+		RedirectHttpToHttps: false, //redirectHttpToHttps,
+	}, nil
+}
+
+func (conn *cloudConnector) waitActive(lbID string) error {
+	attempt := 0
+	return wait.PollImmediate(RetryInterval, RetryTimeout, func() (bool, error) {
+		attempt++
+
+		droplet, _, err := conn.client.LoadBalancers.Get(context.TODO(), lbID)
+		if err != nil {
+			return false, nil
+		}
+		Logger(conn.ctx).Infof("Attempt %v: Instance `%v` is in status `%s`", attempt, lbID, droplet.Status)
+		fmt.Println(droplet.String())
+		if strings.ToLower(droplet.Status) == "active" {
+			return true, nil
+		}
+		return false, nil
+	})
+}

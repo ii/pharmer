@@ -145,15 +145,17 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 	if err != nil {
 		return
 	}
-	var ip string
+	var lbIp string
 	haSetup := IsHASetup(cm.cluster)
 	if haSetup {
 		Logger(cm.ctx).Info("Creating loadbalancer")
-		ip, err = cm.conn.createLoadBalancer(cm.ctx, cm.namer.LoadBalancerName())
+		lbIp, err = cm.conn.createLoadBalancer(cm.ctx, cm.namer.LoadBalancerName())
 		if err != nil {
 			return
 		}
+		Logger(cm.ctx).Infof("Created loadbalancer lbIp = %v", lbIp)
 	}
+	etcdServerAddress := ""
 	for _, master := range masterNG {
 		if d, _ := cm.conn.instanceIfExists(master); d == nil {
 			Logger(cm.ctx).Info("Creating master instance")
@@ -163,7 +165,14 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 				Message:  fmt.Sprintf("Master instance %s will be created", cm.namer.MasterName()),
 			})
 			if !dryRun {
+				if haSetup {
+					master.Labels[api.PharmerHASetup] = "true"
+					master.Labels[api.PharmerLoadBalancerIP] = lbIp
+				}
 				var masterServer *api.NodeInfo
+				if etcdServerAddress != "" {
+					master.Labels[api.EtcdServerAddress] = etcdServerAddress
+				}
 				masterServer, err = cm.conn.CreateInstance(cm.cluster, master, "")
 				if err != nil {
 					return
@@ -174,7 +183,7 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 						Address: masterServer.PrivateIP,
 					})
 				}
-				if !IsHASetup(cm.cluster) {
+				if !haSetup {
 					var providerConf *api.MachineProviderConfig
 					providerConf, err = cm.cluster.MachineProviderConfig(master)
 					if err != nil {
@@ -218,7 +227,7 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 								acts = append(acts, api.Action{
 									Action:   api.ActionNOP,
 									Resource: "ReserveIP",
-									Message:  fmt.Sprintf("Reserved ip %s found", reservedIP),
+									Message:  fmt.Sprintf("Reserved lbIp %s found", reservedIP),
 								})
 							}
 							if reservedIP != masterServer.PublicIP {
@@ -256,10 +265,29 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 					if err = cm.conn.addNodeToBalancer(cm.ctx, cm.namer.LoadBalancerName(), did); err != nil {
 						return
 					}
-					cm.cluster.Spec.ClusterAPI.Status.APIEndpoints = append(cm.cluster.Spec.ClusterAPI.Status.APIEndpoints, clusterv1.APIEndpoint{
-						Host: ip,
+					cm.cluster.Spec.ClusterAPI.Status.APIEndpoints = []clusterv1.APIEndpoint{
+						{
+							Host: masterServer.PublicIP,
+							Port: int(cm.cluster.Spec.API.BindPort),
+						},
+					}
+					/*append(cm.cluster.Spec.ClusterAPI.Status.APIEndpoints, clusterv1.APIEndpoint{
+						Host: masterServer.PublicIP,
 						Port: int(cm.cluster.Spec.API.BindPort),
-					})
+					})*/
+					//	Store(cm.ctx).Clusters().Update(cm.cluster)
+				}
+				if etcdServerAddress == "" {
+					var kc kubernetes.Interface
+					kc, err = cm.GetAdminClient()
+					if err != nil {
+						return
+					}
+					// wait for nodes to start
+					if err = WaitForReadyMaster(cm.ctx, kc); err != nil {
+						return
+					}
+					etcdServerAddress = masterServer.PublicIP
 				}
 
 			}
@@ -269,6 +297,15 @@ func (cm *ClusterManager) applyCreate(dryRun bool) (acts []api.Action, err error
 				Resource: "MasterInstance",
 				Message:  fmt.Sprintf("master instance %v already exist", master.Name),
 			})
+		}
+	}
+
+	if haSetup {
+		cm.cluster.Spec.ClusterAPI.Status.APIEndpoints = []clusterv1.APIEndpoint{
+			{
+				Host: lbIp,
+				Port: int(cm.cluster.Spec.API.BindPort),
+			},
 		}
 	}
 

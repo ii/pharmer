@@ -21,8 +21,8 @@ var kubernetesCNIVersions = map[string]string{
 
 var prekVersions = map[string]string{
 	"1.8.0":  "1.8.0",
-	"1.9.0":  "1.10.1-alpha.0",
-	"1.10.0": "1.10.1-alpha.0",
+	"1.9.0":  "1.10.1-alpha.1",
+	"1.10.0": "1.10.1-alpha.1",
 }
 
 type TemplateData struct {
@@ -34,6 +34,8 @@ type TemplateData struct {
 	CAKey             string
 	FrontProxyKey     string
 	ETCDCAKey         string
+	ETCDServerAddress string
+	HASetup           bool
 	APIServerAddress  string
 	NetworkProvider   string
 	CloudConfig       string
@@ -192,6 +194,8 @@ pre-k merge master-config \
 	--apiserver-cert-extra-sans=$(pre-k machine public-ips --routable) \
 	--apiserver-cert-extra-sans=$(pre-k machine private-ips) \
 	--node-name=${NODE_NAME:-} \
+    --ha={{ .HASetup }} \
+    --etcd-server={{ .ETCDServerAddress}} \
 	> /etc/kubernetes/kubeadm/config.yaml
 pre-k create etcd --config=/etc/kubernetes/kubeadm/config.yaml
 kubeadm init --config=/etc/kubernetes/kubeadm/config.yaml --skip-token-print

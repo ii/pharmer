@@ -43,6 +43,7 @@ type ApiServerTemplate struct {
 	TLSCrt                 string
 	TLSKey                 string
 	Provider               string
+	MasterCount            int
 }
 
 var apiServerImage = "pharmer/cluster-apiserver:0.0.2"
@@ -206,6 +207,10 @@ func (ca *ClusterApi) CreateApiServerAndController() error {
 	if ca.ctx, err = LoadApiserverCertificate(ca.ctx, ca.cluster); err != nil {
 		return err
 	}
+	masterNG, err := FindMasterMachines(ca.cluster)
+	if err != nil {
+		return err
+	}
 
 	var tmplBuf bytes.Buffer
 	err = tmpl.Execute(&tmplBuf, ApiServerTemplate{
@@ -218,6 +223,7 @@ func (ca *ClusterApi) CreateApiServerAndController() error {
 		TLSCrt:                 base64.StdEncoding.EncodeToString(cert.EncodeCertPEM(ApiServerCert(ca.ctx))),
 		TLSKey:                 base64.StdEncoding.EncodeToString(cert.EncodePrivateKeyPEM(ApiServerKey(ca.ctx))),
 		Provider:               ca.cluster.ProviderConfig().CloudProvider,
+		MasterCount:            len(masterNG),
 	})
 	if err != nil {
 		return err
@@ -310,7 +316,7 @@ metadata:
     api: clusterapi
     apiserver: "true"
 spec:
-  replicas: 1
+  replicas: {{ .MasterCount }}
   template:
     metadata:
       labels:
@@ -345,7 +351,7 @@ spec:
         command:
         - "./apiserver"
         args:
-        - "--etcd-servers=http://etcd-clusterapi-svc:2379"
+        - "--etcd-servers=http://127.0.0.1:2379"
         - "--tls-cert-file=/apiserver.local.config/certificates/tls.crt"
         - "--tls-private-key-file=/apiserver.local.config/certificates/tls.key"
         - "--audit-log-path=-"
@@ -433,98 +439,6 @@ spec:
         secret:
           secretName: pharmer-cred
           defaultMode: 256
-
----
-apiVersion: apps/v1beta1
-kind: StatefulSet
-metadata:
-  name: etcd-clusterapi
-  namespace: default
-spec:
-  serviceName: "etcd"
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: etcd
-    spec:
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
-      tolerations:
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoExecute
-        key: node.alpha.kubernetes.io/notReady
-        operator: Exists
-      - effect: NoExecute
-        key: node.alpha.kubernetes.io/unreachable
-        operator: Exists
-      volumes:
-      - hostPath:
-          path: /var/lib/etcd2
-          type: DirectoryOrCreate
-        name: etcd-data-dir
-      terminationGracePeriodSeconds: 10
-      containers:
-      - name: etcd
-        image: quay.io/coreos/etcd:latest
-        imagePullPolicy: Always
-        resources:
-          requests:
-            cpu: 100m
-            memory: 20Mi
-          limits:
-            cpu: 100m
-            memory: 30Mi
-        env:
-        - name: ETCD_DATA_DIR
-          value: /etcd-data-dir
-        command:
-        - /usr/local/bin/etcd
-        - --listen-client-urls
-        - http://0.0.0.0:2379
-        - --advertise-client-urls
-        - http://localhost:2379
-        ports:
-        - containerPort: 2379
-        volumeMounts:
-        - name: etcd-data-dir
-          mountPath: /etcd-data-dir
-        readinessProbe:
-          httpGet:
-            port: 2379
-            path: /health
-          failureThreshold: 1
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 2
-        livenessProbe:
-          httpGet:
-            port: 2379
-            path: /health
-          failureThreshold: 3
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 2
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: etcd-clusterapi-svc
-  namespace: default
-  labels:
-    app: etcd
-spec:
-  ports:
-  - port: 2379
-    name: etcd
-    targetPort: 2379
-  selector:
-    app: etcd
 ---
 apiVersion: v1
 kind: Secret

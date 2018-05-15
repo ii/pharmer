@@ -57,9 +57,25 @@ func newMasterTemplateData(ctx context.Context, cluster *api.Cluster, machine *c
 		api.NodePoolKey: machine.Name,
 	}.String()
 
-	clusterType := "seed"
+	extraArgs := map[string]string{
+		"name":             machine.Name,
+		"cluster-type":     "seed",
+		"data-dir":         fmt.Sprintf("/var/lib/etcd/%v", machine.Name),
+		"listen-peer-urls": "http://127.0.0.1:2380",
+		//"listen-metrics-urls":         "https://127.0.0.1:2381",
+		"listen-client-urls":          "http://0.0.0.0:2379",
+		"initial-advertise-peer-urls": "http://127.0.0.1:2380",
+		"advertise-client-urls":       "http://127.0.0.1:2379",
+		//"client-cert-auth":            "true",
+		//"peer-client-cert-auth":       "false",
+		"quota-backend-bytes": "2147483648",
+		"v": "10",
+	}
+
 	if machine.Labels[api.EtcdMemberKey] == api.RoleMember {
-		clusterType = "join"
+		extraArgs["cluster-type"] = "join"
+		//extraArgs["server-address"] = machine.Labels[api.EtcdServerAddress]
+		td.ETCDServerAddress = fmt.Sprintf("http://%s:2379", machine.Labels[api.EtcdServerAddress])
 	}
 
 	cfg := kubeadmapi.MasterConfiguration{
@@ -79,20 +95,7 @@ func newMasterTemplateData(ctx context.Context, cluster *api.Cluster, machine *c
 		KubernetesVersion: cluster.Spec.KubernetesVersion,
 		Etcd: kubeadmapi.Etcd{
 			Image: EtcdImage,
-			ExtraArgs: map[string]string{
-				"name":                        machine.Name,
-				"cluster-type":                clusterType,
-				"data-dir":                    fmt.Sprintf("/var/lib/etcd/%v", machine.Name),
-				//"listen-peer-urls":            "https://127.0.0.1:2380",
-				//"listen-metrics-urls":         "https://127.0.0.1:2381",
-				//"listen-client-urls":          "https://127.0.0.1:2379",
-				//"initial-advertise-peer-urls": "https://127.0.0.1:2380",
-				//"advertise-client-urls":       "https://127.0.0.1:2379",
-				//"client-cert-auth":            "true",
-				//"peer-client-cert-auth":       "false",
-				"quota-backend-bytes": "2147483648",
-				"v": "10",
-			},
+			//ExtraArgs: extraArgs,
 		},
 		CertificatesDir: "/etc/kubernetes/pki",
 		// "external": cloudprovider not supported for apiserver and controller-manager
@@ -102,7 +105,13 @@ func newMasterTemplateData(ctx context.Context, cluster *api.Cluster, machine *c
 		ControllerManagerExtraArgs: cluster.Spec.ControllerManagerExtraArgs,
 		SchedulerExtraArgs:         cluster.Spec.SchedulerExtraArgs,
 		APIServerCertSANs:          cluster.Spec.APIServerCertSANs,
+		NodeName:                   machine.Name,
 	}
+	if _, found := machine.Labels[api.PharmerHASetup]; found {
+		td.HASetup = true
+		cfg.APIServerCertSANs = append(cfg.APIServerCertSANs, machine.Labels[api.PharmerLoadBalancerIP])
+	}
+
 	td.MasterConfiguration = &cfg
 	return td
 }
@@ -126,6 +135,10 @@ ensure_basic_networking() {
 }
 
 ensure_basic_networking
+{{ end }}
+
+{{ define "prepare-host" }}
+NODE_NAME=$(hostname)
 {{ end }}
 `
 )

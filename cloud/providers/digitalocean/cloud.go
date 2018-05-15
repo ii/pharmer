@@ -370,7 +370,7 @@ func (conn *cloudConnector) createLoadBalancer(ctx context.Context, name string)
 			if err != nil {
 				return "", err
 			}
-			if err = conn.waitActive(lb.ID); err != nil {
+			if lb, err = conn.waitActive(lb.ID); err != nil {
 				return "", err
 			}
 			return lb.IP, nil
@@ -378,7 +378,7 @@ func (conn *cloudConnector) createLoadBalancer(ctx context.Context, name string)
 	}
 
 	if lb.Status != "active" {
-		if err = conn.waitActive(lb.ID); err != nil {
+		if lb, err = conn.waitActive(lb.ID); err != nil {
 			return "", err
 		}
 	}
@@ -461,20 +461,26 @@ func (conn *cloudConnector) buildLoadBalancerRequest(lbName string) (*godo.LoadB
 	}, nil
 }
 
-func (conn *cloudConnector) waitActive(lbID string) error {
+func (conn *cloudConnector) waitActive(lbID string) (*godo.LoadBalancer, error) {
 	attempt := 0
-	return wait.PollImmediate(RetryInterval, RetryTimeout, func() (bool, error) {
+	err := wait.PollImmediate(RetryInterval, RetryTimeout, func() (bool, error) {
 		attempt++
 
-		droplet, _, err := conn.client.LoadBalancers.Get(context.TODO(), lbID)
+		lb, _, err := conn.client.LoadBalancers.Get(context.TODO(), lbID)
 		if err != nil {
 			return false, nil
 		}
-		Logger(conn.ctx).Infof("Attempt %v: Instance `%v` is in status `%s`", attempt, lbID, droplet.Status)
-		fmt.Println(droplet.String())
-		if strings.ToLower(droplet.Status) == "active" {
+		Logger(conn.ctx).Infof("Attempt %v: LoadBalancer `%v` is in status `%s`", attempt, lbID, lb.Status)
+		fmt.Println(lb.String())
+		if strings.ToLower(lb.Status) == "active" {
 			return true, nil
 		}
 		return false, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	lb, _, err := conn.client.LoadBalancers.Get(context.TODO(), lbID)
+	return lb, err
+
 }

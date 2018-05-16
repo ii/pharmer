@@ -467,6 +467,9 @@ func (cm *ClusterManager) applyDelete(dryRun bool) (acts []api.Action, err error
 			Message:  "Public key not found",
 		})
 	}
+	if IsHASetup(cm.cluster) {
+		cm.conn.deleteLoadBalancer(cm.ctx, cm.namer.LoadBalancerName())
+	}
 
 	// Failed
 	cm.cluster.Status.Phase = api.ClusterDeleted

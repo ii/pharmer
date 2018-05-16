@@ -385,6 +385,15 @@ func (conn *cloudConnector) createLoadBalancer(ctx context.Context, name string)
 	return lb.IP, nil
 }
 
+func (conn *cloudConnector) deleteLoadBalancer(ctx context.Context, name string) error {
+	lb, err := conn.lbByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	_, err = conn.client.LoadBalancers.Delete(ctx, lb.ID)
+	return err
+}
+
 func (conn *cloudConnector) addNodeToBalancer(ctx context.Context, lbName string, id int) error {
 	lb, err := conn.lbByName(ctx, lbName)
 	if err != nil {
@@ -444,7 +453,8 @@ func (conn *cloudConnector) buildLoadBalancerRequest(lbName string) (*godo.LoadB
 		//CookieTtlSeconds: ttl,
 	}
 
-	algorithm := "least_connections"
+	//algorithm := "least_connections"
+	algorithm := "round_robin"
 
 	//	redirectHttpToHttps := getRedirectHttpToHttps(service)
 	clusterConfig := conn.cluster.ProviderConfig()

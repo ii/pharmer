@@ -21,8 +21,8 @@ var kubernetesCNIVersions = map[string]string{
 
 var prekVersions = map[string]string{
 	"1.8.0":  "1.8.0",
-	"1.9.0":  "1.10.1-alpha.1",
-	"1.10.0": "1.10.1-alpha.1",
+	"1.9.0":  "1.10.1-alpha.2",
+	"1.10.0": "1.10.1-alpha.2",
 }
 
 type TemplateData struct {

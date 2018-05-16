@@ -75,7 +75,7 @@ func newMasterTemplateData(ctx context.Context, cluster *api.Cluster, machine *c
 	if machine.Labels[api.EtcdMemberKey] == api.RoleMember {
 		extraArgs["cluster-type"] = "join"
 		//extraArgs["server-address"] = machine.Labels[api.EtcdServerAddress]
-		td.ETCDServerAddress = fmt.Sprintf("http://%s:2379", machine.Labels[api.EtcdServerAddress])
+		td.ETCDServerAddress = machine.Labels[api.EtcdServerAddress] //fmt.Sprintf("http://%s:2379", machine.Labels[api.EtcdServerAddress])
 	}
 
 	cfg := kubeadmapi.MasterConfiguration{
